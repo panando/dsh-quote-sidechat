@@ -1,0 +1,12 @@
+# @panando/dsh-quote-sidechat — host plugin insertion.
+#
+# The host half (index.mjs) is deliberately inert: every behaviour lives in the
+# browser half (lib/client.js). This row exists so the package is an ENABLED
+# Loader entry, which is what makes the host-side client-modules scanner publish
+# `exports["./client"]` to the browser as a module.
+#
+# 铁律（AGENTS.md / 模板）：下面的 id 必须与 index.mjs 的 `export const name`
+# 逐字一致，否则宿主 config 覆盖会静默失效（docs/01-architecture.md 第 4 节）。
+- insert:
+    - id: quote-sidechat
+      name: '@panando/dsh-quote-sidechat'

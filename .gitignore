@@ -1,0 +1,13 @@
+# deps & build output
+node_modules/
+
+# logs & temp
+*.log
+.DS_Store
+tmp/
+.cache/
+
+# local env — 绝不提交密钥
+.env
+.env.*
+!.env.example

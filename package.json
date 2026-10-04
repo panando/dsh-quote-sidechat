@@ -1,0 +1,45 @@
+{
+  "name": "@panando/dsh-quote-sidechat",
+  "version": "0.3.0",
+  "private": true,
+  "description": "选中 DSH 回复片段 → 原子引用 chip（可整体删除、点击预览、提交时结构化序列化）+ 侧边提问。上游 fork 自 QIN-SMART/dsh-quote-to-chat v0.2.0。",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.19.0" },
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.mjs",
+    "lib/client.js",
+    "locale/*.json",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  },
+  "scripts": {
+    "test": "node --test test/verify.mjs",
+    "check": "node --check index.mjs && node --check lib/client.js && node --test test/verify.mjs",
+    "verify:ui": "node tools/real-ui-check.mjs"
+  },
+  "repository": { "type": "git", "url": "git+https://github.com/panando/dsh-quote-sidechat.git" },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "selection",
+    "quote",
+    "reference-chip",
+    "side-chat"
+  ]
+}
