@@ -1459,6 +1459,15 @@ test('点「添加到对话」（chip 模式）：写入宿主原子 chip，span
   assert.ok(typeof call.ref.ref === 'string' && call.ref.ref.startsWith('q2|'), 'ref 必须是自包含编码（q2 携带定位信息）');
   assert.equal(call.ref.clipboardText, '引用自第 3 轮回复：\n\n```\n' + world.paragraph.textContent + '\n```\n\n', '剪贴板形式 = 结构化引用块');
   assert.ok(call.ref.label && call.ref.label.length > 0, 'chip 必须有可见短标签');
+  // chip 是单行小元素：必须显示**引用正文**的预览，而不是序列化里的结构标注行。
+  assert.ok(
+    call.ref.label.includes(world.paragraph.textContent.slice(0, 8)),
+    'chip 标签应是引用内容预览，实际：' + JSON.stringify(call.ref.label)
+  );
+  assert.ok(
+    !/引用自第/.test(call.ref.label),
+    'chip 标签不应是结构标注行（那是给模型看的），实际：' + JSON.stringify(call.ref.label)
+  );
   assert.ok(typeof call.span.draftRev === 'number', 'span 必须带 draftRev（CAS 语义不变）');
 
   // 反向验证：codec 能把这个 ref 还原成模型形式（宿主提交时走的就是这条）。
