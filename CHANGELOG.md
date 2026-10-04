@@ -9,6 +9,8 @@ fork 自 QIN-SMART/dsh-quote-to-chat v0.2.0。核心增强：**引用从纯文�
 - `ref` 自包含（`q1|base64url(模型文本)`）：刷新/重连后仍可序列化，损坏 ref 明确 reject（宿主会因序列化失败拒绝该轮，故不能静默送空串）。
 - 新增配置 `referenceMode`：`chip`（默认，原子引用）/ `quote`（旧的纯文本块，回归对照）。宿主缺少引用管线或 chip 写入被拒时自动降级纯文本，不静默丢内容。
 - 测试：新增 5 条离线断言（source 契约、codec 自包含还原、chip 写入、拒绝降级、quote 强制纯文本）。
+- 侧边提问改用**带结构化边界的引用文本**（`【引用 · 第 N 轮回复】` … `【/引用】`）。侧栏 composer 是 dsh-better-sidebar 自己的 `<textarea>`（useState 驱动），既渲染不了宿主 chip，也不经 `serializeReference`，故用显式边界让模型同样能切分引用与用户输入。
+- 诊断：`window.__dshQuoteSideChat.probe()` 一次性报告引用管线各环节可达性（服务、shell、桥实例、侧栏 composer 形态）。
 
 ## 0.2.0 — 2026-10-02
 

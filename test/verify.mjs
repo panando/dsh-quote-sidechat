@@ -1035,6 +1035,31 @@ test('没装 dsh-better-sidebar：整条动作隐藏，点了也只给明确提�
   assert.equal(flashText(bundle), '未安装 dsh-better-sidebar');
 });
 
+test('侧边对话引用带结构化标记：模型能分清「引用原文」与「用户输入」', () => {
+  const service = fakeSideService();
+  const bundle = withSelection({ services: { betterSidebar: service }, world: { turn: 3 } });
+  const composer = addSideComposer(bundle.document, { value: '' });
+  clickBar(bundle, 'side');
+
+  const written = composer.value;
+  // 结构化边界：明确的起止标记 + 来源轮次，模型据此切分引用与用户输入。
+  assert.match(written, /【引用 · 第 3 轮回复】/, '必须带来源标记，让模型知道引用的是哪一轮');
+  assert.match(written, /【\/引用】/, '必须有明确的结束标记，避免引用与后续提问混为一谈');
+  assert.ok(
+    written.indexOf('【引用 · 第 3 轮回复】') < written.indexOf(bundle.world.paragraph.textContent),
+    '标记在原文之前'
+  );
+  assert.ok(
+    written.indexOf('【/引用】') > written.indexOf(bundle.world.paragraph.textContent),
+    '结束标记在原文之后'
+  );
+  // 多行引用每行都要保留引用前缀，不能塌成一行
+  const quoted = bundle.world.paragraph.textContent;
+  for (const line of quoted.split('\n')) {
+    assert.ok(written.includes('> ' + line), '多行引用的每一行都要带 > 前缀：' + line);
+  }
+});
+
 test('装了侧边对话且右栏已经开着输入框：直接写进去，不再开新线程', () => {
   const service = fakeSideService();
   const bundle = withSelection({ services: { betterSidebar: service } });
@@ -1046,7 +1071,7 @@ test('装了侧边对话且右栏已经开着输入框：直接写进去，不�
   clickBar(bundle, 'side');
 
   assert.equal(service.calls.openTab.length, 0, '已有输入框就不该再开一个线程');
-  assert.equal(composer.value, '先写了一半的问题\n\n> ' + bundle.world.paragraph.textContent + '\n\n');
+  assert.equal(composer.value, '先写了一半的问题\n\n【引用 · 第 3 轮回复】\n\n> ' + bundle.world.paragraph.textContent + '\n【/引用】\n\n');
   assert.equal(bundle.document.focusedEditor, composer, '光标要落到侧边对话输入框');
   assert.deepEqual(composer.__caret, [composer.value.length, composer.value.length], '光标落在末尾');
   assert.equal(flashText(bundle), '已在侧边对话中引用');
@@ -1076,7 +1101,7 @@ test('输入框稍后才出现：轮询等到它再写入', async () => {
   await new Promise((r) => setTimeout(r, 260));
   const composer = bundle.document.querySelector('textarea');
   assert.ok(composer, '轮询应等到输入框出现');
-  assert.equal(composer.value, '> ' + bundle.world.paragraph.textContent + '\n\n');
+  assert.equal(composer.value, '【引用 · 第 3 轮回复】\n\n> ' + bundle.world.paragraph.textContent + '\n【/引用】\n\n');
   assert.equal(flashText(bundle), '已在侧边对话中引用');
 });
 
@@ -1133,7 +1158,7 @@ test('侧边提问后再点「添加到对话」互不干扰：草稿与侧边�
 
   clickBar(bundle, 'side');
   assert.equal(bundle.actions.calls.insert.length, 0, '侧边提问不该动主会话草稿');
-  assert.match(composer.value, /^> /);
+  assert.match(composer.value, /^【引用 · 第 3 轮回复】\n\n> /, '侧边载荷以结构化标记 + 引用前缀开头');
 
   bundle.window.__selection = makeSelection(bundle.document, bundle.world.paragraph, {});
   bundle.document.dispatch('selectionchange');
