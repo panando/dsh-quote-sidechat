@@ -5,8 +5,8 @@
 # Loader entry, which is what makes the host-side client-modules scanner publish
 # `exports["./client"]` to the browser as a module.
 #
-# 铁律（AGENTS.md / 模板）：下面的 id 必须与 index.mjs 的 `export const name`
-# 逐字一致，否则宿主 config 覆盖会静默失效（docs/01-architecture.md 第 4 节）。
+# The id must match `name` exported by index.mjs exactly, otherwise host-side
+# config overrides for this plugin silently stop taking effect.
 - insert:
     - id: quote-sidechat
       name: '@panando/dsh-quote-sidechat'
