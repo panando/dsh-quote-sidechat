@@ -407,7 +407,15 @@ function fakeActions(over = {}) {
 /**
  * 宿主引用管线桩：`inputTriggers.registerSource` 记录 source；
  * `conversation.input.for(binding.ctx)` 返回一个能记 insertReference 的 shell。
- * 复现真实契约：`conversation.input.for(actx)` 按会话解析，span 带 draftRev。
+ *
+ * 忠实还原真实宿主（见 dsh-client-ui-conversation 的 SessionInputShell）：
+ *   · shell 上有 `insertReference(ref, span)` / `state` / `setDraft`；
+ *   · **shell 上没有 captureInsertion**——它只存在于公开的 `actions` 面
+ *     （ui-conversation 的 `ctx.uiSession.provide({ props: ['inputActions'] })`
+ *     把 `shell.actions` 交给会话桥组件），而 actions.captureInsertion 返回的是
+ *     **detect 坐标系**的 span（与 state.draft 这份 clipboard 投影不是同一坐标系）。
+ *   所以 chip 写入必须复用会话桥手上的 inputActions.captureInsertion()，不能拿
+ *   state.draft.length 去拼（草稿里已有 chip 时两者会错位）。
  */
 function fakeHost(opts = {}) {
   const sources = [];
@@ -432,9 +440,9 @@ function fakeHost(opts = {}) {
     const calls = { insertReference: [] };
     const shell = {
       calls,
-      state: { getSnapshot: () => ({ draft: '', draftRev: 3 }) },
+      // state.draft 是 clipboard 投影（可与 detect 坐标不同长）；draftRev 供 CAS。
+      state: { getSnapshot: () => ({ draft: opts.draftText || '', draftRev: 3 }) },
       setDraft() {},
-      captureInsertion: () => ({ start: 0, end: 0, draftRev: 3 }),
       insertReference(ref, span) {
         calls.insertReference.push({ ref, span });
         return opts.insertReferenceReturns === undefined ? true : opts.insertReferenceReturns;
@@ -1271,6 +1279,36 @@ test('点「添加到对话」（chip 模式）：写入宿主原子 chip，span
   // 反向验证：codec 能把这个 ref 还原成模型形式（宿主提交时走的就是这条）。
   const src = host.sources[0];
   assert.equal(await src.codec.serialize(call.ref.ref), call.ref.clipboardText);
+});
+
+test('chip 写入的 span 必须取自 inputActions.captureInsertion（detect 坐标系），不得由 state.draft 拼', () => {
+  // 草稿里已经有一个 chip：clipboard 投影比 detect 投影长，两者长度不等。
+  // 真实宿主里 shell 没有 captureInsertion，只有会话桥手上的 inputActions 有。
+  const host = fakeHost({
+    sessionIds: ['session-main-1'],
+    draftText: '@已有引用.txt 你好'          // clipboard 投影（长）
+    // detect 坐标里那个 chip 只占 1 个字符，所以正确插入点是 6 而不是 12
+  });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  const made = makeCtx(host.services);
+  plugin.apply(made.ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1' });
+  const actions = fakeActions();             // 桥手上的 inputActions
+  plugin.__internals.bindInstance(world.anchor, actions);
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+
+  clickBar({ document }, 'add');
+
+  const shell = host.shells.get('session-main-1').shell;
+  assert.equal(shell.calls.insertReference.length, 1, '应写入一个 chip');
+  // 唯一正确的 span 是 captureInsertion 给的那一个（fakeActions 返回 {start:0,end:0,draftRev:7}）。
+  assert.deepEqual(
+    plain(shell.calls.insertReference[0].span),
+    { start: 0, end: 0, draftRev: 7 },
+    'span 必须原样来自 inputActions.captureInsertion，不能由 state.draft.length 推导'
+  );
 });
 
 test('宿主拒绝 chip 写入（insertReference 返回 false）：降级为纯文本，不静默丢内容', () => {
