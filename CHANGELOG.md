@@ -11,6 +11,10 @@ fork 自 QIN-SMART/dsh-quote-to-chat v0.2.0。核心增强：**引用从纯文�
 - 测试：新增 5 条离线断言（source 契约、codec 自包含还原、chip 写入、拒绝降级、quote 强制纯文本）。
 - 侧边提问改用**带结构化边界的引用文本**（`【引用 · 第 N 轮回复】` … `【/引用】`）。侧栏 composer 是 dsh-better-sidebar 自己的 `<textarea>`（useState 驱动），既渲染不了宿主 chip，也不经 `serializeReference`，故用显式边界让模型同样能切分引用与用户输入。
 - 诊断：`window.__dshQuoteSideChat.probe()` 一次性报告引用管线各环节可达性（服务、shell、桥实例、侧栏 composer 形态）。
+- **点击 chip 回跳原文**（缝 D）：ref 升级为 `q2`（携带 `sessionId` + `turn` 的定位载荷），实现宿主 source 的 `openReference` —— 单击 chip 滚动定位到原文轮次并短暂高亮。定位信息来自 ref 自身，刷新后仍可回跳。
+  - `q1` 旧 ref 保持可解码（刷新前的草稿、跨版本粘贴不失效）；没有定位信息时明确提示。
+  - 原文已被清理或不在当前会话时**接管点击并明确提示**，不静默无反应，也不跨会话乱跳。
+- 修正：跨会话判定改用宿主传入的会话投影（`openReference` 的第一个参数），不再从 `document.body` 往上找 `data-conversation-session`（那个属性在会话容器上，从 body 走永远找不到，等于死代码）。
 
 ## 0.2.0 — 2026-10-02
 

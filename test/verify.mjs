@@ -1079,6 +1079,98 @@ test('侧边对话引用：原文含代码围栏时不会被提前闭合', () =>
   );
 });
 
+// ---------------------------------------------------------------------------
+// 用例：点击 chip 预览原文（缝 D）
+// ---------------------------------------------------------------------------
+
+test('ref 自带定位信息（q2），旧 q1 仍可序列化——向后兼容', async () => {
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(host.services).ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1', turn: 7 });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+  clickBar({ document }, 'add');
+
+  const src = host.sources[0];
+  const ref = host.shells.get('session-main-1').shell.calls.insertReference[0].ref.ref;
+  assert.ok(ref.startsWith('q2|'), '新插入的 ref 应升级为 q2 以携带定位信息，实际：' + ref);
+
+  // 定位信息能被还原：点 chip 时据此找回原文
+  const decoded = src.__decodeLocate ? src.__decodeLocate(ref) : null;
+  const locate = plugin.__internals.decodeRefPayload ? plugin.__internals.decodeRefPayload(ref) : decoded;
+  assert.ok(locate, 'ref 应能解出定位载荷');
+  assert.equal(locate.sessionId, 'session-main-1', '定位载荷带会话身份');
+  assert.equal(locate.turn, 7, '定位载荷带轮次');
+  assert.equal(locate.modelText, '> ' + world.paragraph.textContent + '\n\n', '定位载荷仍带模型文本');
+
+  // 向后兼容：旧 q1 ref 依然能序列化（刷新前的草稿、跨版本粘贴）
+  assert.equal(await src.codec.serialize(handRef('> 老引用\n\n')), '> 老引用\n\n');
+});
+
+test('点击 chip：定位到原文并高亮；原文不在页面时明确提示而非静默', () => {
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(host.services).ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1', turn: 7 });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+  clickBar({ document }, 'add');
+
+  const src = host.sources[0];
+  const ref = host.shells.get('session-main-1').shell.calls.insertReference[0].ref.ref;
+
+  // 1) 命中：openReference 返回 true，且该轮被滚动定位 + 高亮
+  const row = world.turn;
+  row.scrollIntoView = function () { row.__scrolled = true; };
+  assert.equal(src.openReference({ sessionId: 'session-main-1' }, { ref }), true, '命中时应接管点击');
+  assert.equal(row.__scrolled, true, '必须滚动定位到原文所在轮次');
+
+  // 2) 未命中：原文已被清理/切走时返回 false，且给出提示而不是静默
+  const orphan = document.createElement('div');
+  orphan.setAttribute('data-chat-turn', '999');
+  document.body.appendChild(orphan);
+  assert.equal(src.openReference({ sessionId: 'session-main-1' }, { ref: ref }), true, '当前轮次仍在，仍应命中');
+  // 构造一个指向不存在轮次的 ref：必须接管点击并明确提示，而不是静默无反应
+  const ghostRef = plugin.__internals.encodeRef('> 幽灵\n\n', { sessionId: 'session-main-1', turn: 9999 });
+  assert.equal(
+    src.openReference({ sessionId: 'session-main-1' }, { ref: ghostRef }),
+    true,
+    '原文不在页面时仍接管点击，以便给出提示'
+  );
+  assert.match(flashText({ document }), /找不到原文/, '必须明确告知，而不是静默');
+});
+
+test('点击 chip：原文在另一个会话时明确提示，不跨会话乱跳', () => {
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(host.services).ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1', turn: 7 });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+  clickBar({ document }, 'add');
+
+  const src = host.sources[0];
+  const ref = host.shells.get('session-main-1').shell.calls.insertReference[0].ref.ref;
+  const row = world.turn;
+  row.scrollIntoView = function () { row.__scrolled = true; };
+
+  // chip 属于 session-main-1，但当前 chip 所在的会话是别的 → 不该跳
+  assert.equal(src.openReference({ sessionId: 'session-other' }, { ref }), true, '接管点击以便提示');
+  assert.notEqual(row.__scrolled, true, '跨会话时不得滚动定位到别的会话的原文');
+  assert.match(flashText({ document }), /另一个会话/, '明确告知需要切回原会话');
+
+  // 同一会话则正常回跳
+  assert.equal(src.openReference({ sessionId: 'session-main-1' }, { ref }), true);
+  assert.equal(row.__scrolled, true, '同会话时应滚动定位');
+});
+
 test('装了侧边对话且右栏已经开着输入框：直接写进去，不再开新线程', () => {
   const service = fakeSideService();
   const bundle = withSelection({ services: { betterSidebar: service } });
@@ -1315,7 +1407,7 @@ test('点「添加到对话」（chip 模式）：写入宿主原子 chip，span
   assert.equal(shell.calls.insertReference.length, 1, '必须向选区所在会话写一个 chip');
   const call = shell.calls.insertReference[0];
   assert.equal(call.ref.source, 'quote-ref', 'chip 的 source 必须是已注册的 source 名');
-  assert.ok(typeof call.ref.ref === 'string' && call.ref.ref.startsWith('q1|'), 'ref 必须是自包含编码');
+  assert.ok(typeof call.ref.ref === 'string' && call.ref.ref.startsWith('q2|'), 'ref 必须是自包含编码（q2 携带定位信息）');
   assert.equal(call.ref.clipboardText, '> ' + world.paragraph.textContent + '\n\n', '剪贴板形式 = 引用块正文');
   assert.ok(call.ref.label && call.ref.label.length > 0, 'chip 必须有可见短标签');
   assert.ok(typeof call.span.draftRev === 'number', 'span 必须带 draftRev（CAS 语义不变）');
