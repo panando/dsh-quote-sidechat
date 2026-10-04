@@ -1108,7 +1108,7 @@ test('ref 自带定位信息（q2），旧 q1 仍可序列化——向后兼容'
   assert.ok(locate, 'ref 应能解出定位载荷');
   assert.equal(locate.sessionId, 'session-main-1', '定位载荷带会话身份');
   assert.equal(locate.turn, 7, '定位载荷带轮次');
-  assert.equal(locate.modelText, '> ' + world.paragraph.textContent + '\n\n', '定位载荷仍带模型文本');
+  assert.equal(locate.modelText, '引用自第 7 轮回复：\n\n```\n' + world.paragraph.textContent + '\n```\n\n', '定位载荷仍带结构化模型文本');
 
   // 向后兼容：旧 q1 ref 依然能序列化（刷新前的草稿、跨版本粘贴）
   assert.equal(await src.codec.serialize(handRef('> 老引用\n\n')), '> 老引用\n\n');
@@ -1457,13 +1457,38 @@ test('点「添加到对话」（chip 模式）：写入宿主原子 chip，span
   const call = shell.calls.insertReference[0];
   assert.equal(call.ref.source, 'quote-ref', 'chip 的 source 必须是已注册的 source 名');
   assert.ok(typeof call.ref.ref === 'string' && call.ref.ref.startsWith('q2|'), 'ref 必须是自包含编码（q2 携带定位信息）');
-  assert.equal(call.ref.clipboardText, '> ' + world.paragraph.textContent + '\n\n', '剪贴板形式 = 引用块正文');
+  assert.equal(call.ref.clipboardText, '引用自第 3 轮回复：\n\n```\n' + world.paragraph.textContent + '\n```\n\n', '剪贴板形式 = 结构化引用块');
   assert.ok(call.ref.label && call.ref.label.length > 0, 'chip 必须有可见短标签');
   assert.ok(typeof call.span.draftRev === 'number', 'span 必须带 draftRev（CAS 语义不变）');
 
   // 反向验证：codec 能把这个 ref 还原成模型形式（宿主提交时走的就是这条）。
   const src = host.sources[0];
   assert.equal(await src.codec.serialize(call.ref.ref), call.ref.clipboardText);
+});
+
+test('chip 展开给模型的文本必须是结构化围栏块（已发送消息里不再显示裸 > 引用）', async () => {
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(host.services).ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1', turn: 3 });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+
+  clickBar({ document }, 'add');
+
+  const src = host.sources[0];
+  const ref = host.shells.get('session-main-1').shell.calls.insertReference[0].ref.ref;
+  const modelText = await src.codec.serialize(ref);
+
+  // 宿主把这段文本原样存成用户消息 —— 气泡里显示的就是它。
+  assert.match(modelText, /^引用自第 3 轮回复：\n\n```/, '必须是「标注行 + 围栏」结构');
+  assert.ok(!/^> /m.test(modelText), '不再以裸 blockquote 呈现引用');
+  assert.match(modelText, /```\n\n?$/, '围栏必须闭合（末尾留空行）');
+
+  // 原文逐字保留
+  assert.ok(modelText.includes(world.paragraph.textContent), '原文必须完整保留');
 });
 
 test('chip 写入的 span 必须取自 inputActions.captureInsertion（detect 坐标系），不得由 state.draft 拼', () => {
