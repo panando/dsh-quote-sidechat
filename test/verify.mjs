@@ -292,7 +292,7 @@ function addConversation(document, opts = {}) {
   const composer = document.createElement('div');
   composer.setAttribute('data-slot', 'conversation.composer.bar');
   const anchor = document.createElement('span');
-  anchor.setAttribute('data-dsh-quote-to-chat', 'anchor');
+  anchor.setAttribute('data-dsh-quote-sidechat', 'anchor');
   const editor = document.createElement('div');
   editor.setAttribute('contenteditable', 'true');
   editor.setAttribute('role', 'textbox');
@@ -473,14 +473,14 @@ function fakeHost(opts = {}) {
 
 /** 在工具条上点某个动作（真实 DOM 里 click 冒泡到工具条，mock 里直接派发到条上）。 */
 function clickBar(bundle, action) {
-  const bar = bundle.document.querySelector('[data-dsh-quote-to-chat="bar"]');
-  const button = bar.querySelector('[data-dsh-quote-to-chat="' + action + '"]');
+  const bar = bundle.document.querySelector('[data-dsh-quote-sidechat="bar"]');
+  const button = bar.querySelector('[data-dsh-quote-sidechat="' + action + '"]');
   bar.dispatch('click', { target: button, preventDefault() {} });
   return bar;
 }
 
 function flashText(bundle) {
-  const node = bundle.document.querySelector('[data-dsh-quote-to-chat="flash"]');
+  const node = bundle.document.querySelector('[data-dsh-quote-sidechat="flash"]');
   return node ? node.textContent : null;
 }
 
@@ -516,7 +516,7 @@ test('模块形状：id 等于包名、平铺导出 apply/inject、没有 defaul
 test('import 期间零副作用：没注入样式、没建工具条、没装监听', () => {
   const { document, window, plugin } = loadBundle();
   assert.equal(document.querySelector('style[data-plugin-css="@panando/dsh-quote-sidechat/style"]'), null);
-  assert.equal(document.querySelectorAll('[data-dsh-quote-to-chat]').length, 0);
+  assert.equal(document.querySelectorAll('[data-dsh-quote-sidechat]').length, 0);
   assert.equal(document.listenerCount('selectionchange'), 0);
   assert.equal(window.windowListenerCount('scroll'), 0);
   assert.equal(window.__dshQuoteSideChat, undefined);
@@ -534,18 +534,18 @@ test('apply()：注入打标样式表、建工具条、暴露调试句柄、注�
   assert.match(style.textContent, /--dsw-specific-menu/, '材质必须用原生菜单 token');
   assert.match(style.textContent, /--dsw-menu-backdrop-filter/);
 
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
   assert.ok(bar, '工具条必须挂进 body');
   assert.equal(bar.parentNode, document.body);
   assert.equal(bar.getAttribute('data-open'), '0', '默认不可见');
   assert.equal(bar.getAttribute('role'), 'toolbar');
   assert.deepEqual(
-    bar.querySelectorAll('[data-dsh-quote-to-chat]').map((n) => n.getAttribute('data-dsh-quote-to-chat')),
+    bar.querySelectorAll('[data-dsh-quote-sidechat]').map((n) => n.getAttribute('data-dsh-quote-sidechat')),
     ['add', 'sep-side', 'side', 'sep-copy', 'copy', 'flash']
   );
-  assert.equal(bar.querySelector('[data-dsh-quote-to-chat="add"]').textContent, '添加到对话');
-  assert.equal(bar.querySelector('[data-dsh-quote-to-chat="side"]').textContent, '侧边提问');
-  assert.equal(bar.querySelector('[data-dsh-quote-to-chat="copy"]').textContent, '复制');
+  assert.equal(bar.querySelector('[data-dsh-quote-sidechat="add"]').textContent, '添加到对话');
+  assert.equal(bar.querySelector('[data-dsh-quote-sidechat="side"]').textContent, '侧边提问');
+  assert.equal(bar.querySelector('[data-dsh-quote-sidechat="copy"]').textContent, '复制');
 
   assert.equal(window.__dshQuoteSideChat.version, '0.3.0');
   assert.equal(typeof window.__dshQuoteSideChat.setConfig, 'function');
@@ -579,7 +579,7 @@ test('会话桥组件：渲染一个隐藏锚点，不占布局', () => {
   const { plugin } = loadBundle();
   const element = plugin.__internals.OverlayBridge({ inputActions: fakeActions() });
   assert.equal(element.type, 'span');
-  assert.equal(element.props['data-dsh-quote-to-chat'], 'anchor');
+  assert.equal(element.props['data-dsh-quote-sidechat'], 'anchor');
   assert.equal(element.props['aria-hidden'], 'true');
   assert.equal(element.props.style.display, 'none');
   assert.equal(typeof element.props.ref, 'object');
@@ -792,7 +792,7 @@ test('选中对话正文 → 工具条出现在选区上方，位置写进 style
   document.dispatch('selectionchange');
   flushRaf();
 
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
   assert.equal(bar.getAttribute('data-open'), '1');
   assert.equal(bar.getAttribute('data-placement'), 'above');
   assert.equal(bar.style.left, '562px', '按兜底宽度 176 居中：600 + 50 - 88');
@@ -805,7 +805,7 @@ test('折叠选区 / 过短文本一律收起', () => {
   const { plugin, document, window, flushRaf } = loadBundle();
   plugin.apply(makeCtx().ctx);
   const world = addConversation(document);
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
 
   window.__selection = makeSelection(document, world.paragraph, {});
   document.dispatch('selectionchange');
@@ -830,7 +830,7 @@ test('选区整段滚出视口时不弹（避免工具条悬在空处）', () =>
   const { plugin, document, window, flushRaf } = loadBundle();
   plugin.apply(makeCtx().ctx);
   const world = addConversation(document);
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
 
   window.__selection = makeSelection(document, world.paragraph, { top: -2883, left: 689, width: 306 });
   document.dispatch('selectionchange');
@@ -847,7 +847,7 @@ test('输入框内选中 / 工具条自身 / 对话正文之外都不弹', () =>
   const { plugin, document, window, flushRaf } = loadBundle();
   plugin.apply(makeCtx().ctx);
   const world = addConversation(document);
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
 
   const draft = document.createElement('p');
   draft.textContent = '这是输入框里已经写好的草稿文字';
@@ -869,7 +869,7 @@ test('输入框内选中 / 工具条自身 / 对话正文之外都不弹', () =>
 
   const own = document.createElement('span');
   own.textContent = '工具条自己的文字';
-  own.setAttribute('data-dsh-quote-to-chat', 'flash');
+  own.setAttribute('data-dsh-quote-sidechat', 'flash');
   document.body.appendChild(own);
   window.__selection = makeSelection(document, own, {});
   document.dispatch('selectionchange');
@@ -881,7 +881,7 @@ test('滚动到选区已失效时自动收起', () => {
   const { plugin, document, window, flushRaf } = loadBundle();
   plugin.apply(makeCtx().ctx);
   const world = addConversation(document);
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
 
   window.__selection = makeSelection(document, world.paragraph, {});
   document.dispatch('selectionchange');
@@ -898,7 +898,7 @@ test('Escape 收起工具条', () => {
   const { plugin, document, window, flushRaf } = loadBundle();
   plugin.apply(makeCtx().ctx);
   const world = addConversation(document);
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
 
   window.__selection = makeSelection(document, world.paragraph, {});
   document.dispatch('selectionchange');
@@ -916,7 +916,7 @@ test('Escape 收起工具条', () => {
 test('点「添加到对话」：captureInsertion + insertText 收到引用块，工具条切到结果提示', () => {
   const bundle = withSelection();
   const { bar, actions, world, document } = Object.assign({}, bundle, {
-    bar: bundle.document.querySelector('[data-dsh-quote-to-chat="bar"]')
+    bar: bundle.document.querySelector('[data-dsh-quote-sidechat="bar"]')
   });
   clickBar(bundle, 'add');
 
@@ -980,7 +980,7 @@ test('多会话都对不上时：提示「找不到对应的输入框」，一�
   document.dispatch('selectionchange');
   flushRaf();
 
-  const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
   assert.equal(bar.getAttribute('data-open'), '1', '正文插槽里应当弹条');
 
   clickBar({ document }, 'add');
@@ -1027,7 +1027,7 @@ test('结果提示期间 selectionchange 不打断提示', () => {
 
 test('没装 dsh-better-sidebar：整条动作隐藏，点了也只给明确提示', () => {
   const bundle = withSelection();
-  const bar = bundle.document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = bundle.document.querySelector('[data-dsh-quote-sidechat="bar"]');
   assert.equal(bar.getAttribute('data-sidechat'), '0', '没有服务就该把这条动作藏掉');
   assert.equal(bundle.plugin.__internals.debugState().sideChat, false);
 
@@ -1174,7 +1174,7 @@ test('点击 chip：原文在另一个会话时明确提示，不跨会话乱跳
 test('装了侧边对话且右栏已经开着输入框：直接写进去，不再开新线程', () => {
   const service = fakeSideService();
   const bundle = withSelection({ services: { betterSidebar: service } });
-  const bar = bundle.document.querySelector('[data-dsh-quote-to-chat="bar"]');
+  const bar = bundle.document.querySelector('[data-dsh-quote-sidechat="bar"]');
   assert.equal(bar.getAttribute('data-sidechat'), '1');
   assert.equal(bundle.plugin.__internals.debugState().sideChat, true);
 
@@ -1321,7 +1321,7 @@ test('dispose()：样式表、工具条、监听器、调试句柄全部清干�
   effects[0].cleanup();
 
   assert.equal(document.querySelector('style[data-plugin-css="@panando/dsh-quote-sidechat/style"]'), null);
-  assert.equal(document.querySelector('[data-dsh-quote-to-chat="bar"]'), null);
+  assert.equal(document.querySelector('[data-dsh-quote-sidechat="bar"]'), null);
   assert.equal(document.listenerCount('selectionchange'), 0);
   assert.equal(document.listenerCount('mouseup'), 0);
   assert.equal(document.listenerCount('touchend'), 0);
@@ -1341,7 +1341,7 @@ test('dispose() 之后选区变化不再建工具条（幂等且不复活）', (
   window.__selection = makeSelection(document, world.paragraph, {});
   document.dispatch('selectionchange');
   flushRaf();
-  assert.equal(document.querySelector('[data-dsh-quote-to-chat="bar"]'), null);
+  assert.equal(document.querySelector('[data-dsh-quote-sidechat="bar"]'), null);
   assert.equal(document.querySelector('style[data-plugin-css="@panando/dsh-quote-sidechat/style"]'), null);
 });
 

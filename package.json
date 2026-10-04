@@ -1,8 +1,7 @@
 {
   "name": "@panando/dsh-quote-sidechat",
   "version": "0.3.0",
-  "private": true,
-  "description": "选中 DSH 回复片段 → 原子引用 chip（可整体删除、点击预览、提交时结构化序列化）+ 侧边提问。上游 fork 自 QIN-SMART/dsh-quote-to-chat v0.2.0。",
+  "description": "选中 DSH 回复片段 → 原子引用 chip（可整体删除、点击预览、提交时结构化序列化）+ 侧边提问。",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=22.19.0" },

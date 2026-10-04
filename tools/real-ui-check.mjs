@@ -174,7 +174,7 @@ try {
       pluginResources: resources.filter((name) => name.includes('plugins')).slice(0, 6),
       api: typeof window.__dshQuoteSideChat,
       style: !!document.querySelector('style[data-plugin-css="@panando/dsh-quote-sidechat/style"]'),
-      bar: !!document.querySelector('[data-dsh-quote-to-chat="bar"]')
+      bar: !!document.querySelector('[data-dsh-quote-sidechat="bar"]')
     };
   `);
   check('client bundle 已被浏览器取回（/plugins 资源里出现本包）', boot.published, boot.pluginResources);
@@ -258,10 +258,10 @@ try {
   check('在真实回复正文里建立了选区（且选区在视口内）',
     !selection.error && selection.text.length > 0 && selection.rect.top > 0, selection);
 
-  await waitFor(`document.querySelector('[data-dsh-quote-to-chat="bar"]').getAttribute('data-open') === '1'`, '工具条弹出');
+  await waitFor(`document.querySelector('[data-dsh-quote-sidechat="bar"]').getAttribute('data-open') === '1'`, '工具条弹出');
 
   const popup = await evaluate(`
-    const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+    const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
     const rect = bar.getBoundingClientRect();
     const style = getComputedStyle(bar);
     const alphaPart = style.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
@@ -271,16 +271,16 @@ try {
     const stack = document.elementsFromPoint(cx, cy);
     const labelOf = (el) => {
       if (!el) return null;
-      const mine = el.closest ? el.closest('[data-dsh-quote-to-chat]') : null;
-      if (mine) return 'plugin:' + mine.getAttribute('data-dsh-quote-to-chat');
+      const mine = el.closest ? el.closest('[data-dsh-quote-sidechat]') : null;
+      if (mine) return 'plugin:' + mine.getAttribute('data-dsh-quote-sidechat');
       if (el.closest && el.closest('[data-slot="conversation.session"]')) return 'transcript';
       return el.tagName.toLowerCase();
     };
     return {
       open: bar.getAttribute('data-open'),
       placement: bar.getAttribute('data-placement'),
-      label: bar.querySelector('[data-dsh-quote-to-chat="add"]').textContent,
-      copyLabel: bar.querySelector('[data-dsh-quote-to-chat="copy"]').textContent,
+      label: bar.querySelector('[data-dsh-quote-sidechat="add"]').textContent,
+      copyLabel: bar.querySelector('[data-dsh-quote-sidechat="copy"]').textContent,
       rect: { top: Math.round(rect.top), left: Math.round(rect.left), width: Math.round(rect.width), height: Math.round(rect.height) },
       background: style.backgroundColor,
       backgroundImage: style.backgroundImage.slice(0, 90),
@@ -326,7 +326,7 @@ try {
     const picked = window.__qcPick();
     if (!picked) return { error: '深色主题下没选到正文' };
     await new Promise((r) => setTimeout(r, 350));
-    const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+    const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
     const style = getComputedStyle(bar);
     const alphaPart = style.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
     const parts = alphaPart ? alphaPart[1].split(',').map((s) => s.trim()) : [];
@@ -335,7 +335,7 @@ try {
       background: style.backgroundColor,
       backgroundImage: style.backgroundImage.slice(0, 90),
       alpha: parts.length > 3 ? Number(parts[3]) : 1,
-      labelColor: getComputedStyle(bar.querySelector('[data-dsh-quote-to-chat="add"]')).color,
+      labelColor: getComputedStyle(bar.querySelector('[data-dsh-quote-sidechat="add"]')).color,
       text: picked.text,
       rect: bar.getBoundingClientRect().toJSON()
     };
@@ -355,18 +355,18 @@ try {
   `);
   check('找到真实 composer（Lexical 宿主）', before.found, { found: before.found });
 
-  await evaluate(`document.querySelector('[data-dsh-quote-to-chat="add"]').click(); return true;`);
+  await evaluate(`document.querySelector('[data-dsh-quote-sidechat="add"]').click(); return true;`);
   await sleep(400);
 
   const after = await evaluate(`
-    const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+    const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
     const slot = document.querySelector('[data-slot="conversation.composer.bar"]');
     const editor = (slot || document).querySelector('div[contenteditable="true"][role="textbox"]');
     return {
       draft: editor ? editor.textContent : null,
       focused: document.activeElement === editor,
       flash: bar.getAttribute('data-flash'),
-      flashText: bar.querySelector('[data-dsh-quote-to-chat="flash"]').textContent
+      flashText: bar.querySelector('[data-dsh-quote-sidechat="flash"]').textContent
     };
   `);
   const expected = '> ' + selection.text + '\n\n';
@@ -401,11 +401,11 @@ try {
     const picked = window.__qcPick();
     return picked ? picked.text : null;
   `);
-  await waitFor(`document.querySelector('[data-dsh-quote-to-chat="bar"]').getAttribute('data-open') === '1'`, '工具条再次弹出');
-  const sideLabel = await evaluate(`return document.querySelector('[data-dsh-quote-to-chat="side"]').textContent;`);
+  await waitFor(`document.querySelector('[data-dsh-quote-sidechat="bar"]').getAttribute('data-open') === '1'`, '工具条再次弹出');
+  const sideLabel = await evaluate(`return document.querySelector('[data-dsh-quote-sidechat="side"]').textContent;`);
   check('工具条上有「侧边提问」这一条', sideLabel === '侧边提问', { sideLabel });
 
-  await evaluate(`document.querySelector('[data-dsh-quote-to-chat="side"]').click(); return true;`);
+  await evaluate(`document.querySelector('[data-dsh-quote-sidechat="side"]').click(); return true;`);
 
   const side = await evaluate(`
     const deadline = Date.now() + 12000;
@@ -476,7 +476,7 @@ try {
     sel.removeAllRanges();
     sel.addRange(range);
     await new Promise((r) => setTimeout(r, 300));
-    const bar = document.querySelector('[data-dsh-quote-to-chat="bar"]');
+    const bar = document.querySelector('[data-dsh-quote-sidechat="bar"]');
     const openedAgain = bar.getAttribute('data-open') === '1';
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await new Promise((r) => setTimeout(r, 120));
@@ -495,7 +495,7 @@ try {
     sel.removeAllRanges();
     sel.addRange(range);
     await new Promise((r) => setTimeout(r, 300));
-    return { open: document.querySelector('[data-dsh-quote-to-chat="bar"]').getAttribute('data-open'), selected: sel.toString() };
+    return { open: document.querySelector('[data-dsh-quote-sidechat="bar"]').getAttribute('data-open'), selected: sel.toString() };
   `);
   check('在输入框里选中不弹工具条', composerGuard.open === '0', composerGuard);
 
@@ -507,9 +507,9 @@ try {
       transcriptSlot: !!scope,
       composerSlot: !!document.querySelector('[data-slot="conversation.composer.bar"]'),
       overlaySlot: !!document.querySelector('[data-slot="conversation.input.overlay"]'),
-      anchor: !!document.querySelector('[data-dsh-quote-to-chat="anchor"]'),
+      anchor: !!document.querySelector('[data-dsh-quote-sidechat="anchor"]'),
       turnAttr: turn ? turn.getAttribute('data-chat-turn') : null,
-      overlayHasAnchor: !!document.querySelector('[data-slot="conversation.input.overlay"] [data-dsh-quote-to-chat="anchor"]')
+      overlayHasAnchor: !!document.querySelector('[data-slot="conversation.input.overlay"] [data-dsh-quote-sidechat="anchor"]')
     };
   `);
   check('真实 DOM 契约成立（正文/composer/overlay 插槽都在，桥锚点落在 overlay 里）',
