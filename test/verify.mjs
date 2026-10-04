@@ -1035,29 +1035,48 @@ test('没装 dsh-better-sidebar：整条动作隐藏，点了也只给明确提�
   assert.equal(flashText(bundle), '未安装 dsh-better-sidebar');
 });
 
-test('侧边对话引用带结构化标记：模型能分清「引用原文」与「用户输入」', () => {
+test('侧边对话引用：结构清晰且 Markdown 不错乱（围栏承载原文，标注独立成行）', () => {
   const service = fakeSideService();
-  const bundle = withSelection({ services: { betterSidebar: service }, world: { turn: 3 } });
+  const bundle = withSelection({ services: { betterSidebar: service }, world: { turn: 3, text: '第一段有 Apple ID。\n\n第二段是空的间隔后面。' } });
   const composer = addSideComposer(bundle.document, { value: '' });
   clickBar(bundle, 'side');
 
   const written = composer.value;
-  // 结构化边界：明确的起止标记 + 来源轮次，模型据此切分引用与用户输入。
-  assert.match(written, /【引用 · 第 3 轮回复】/, '必须带来源标记，让模型知道引用的是哪一轮');
-  assert.match(written, /【\/引用】/, '必须有明确的结束标记，避免引用与后续提问混为一谈');
+
+  // 1) 原文必须被围栏完整包裹：任何 Markdown 解析器都不会把它拆成两段
+  const fence = written.match(/^```[^\n]*\n([\s\S]*?)\n```$/m);
+  assert.ok(fence, '原文必须被 fenced 围栏包裹，实际输出：\n' + written);
+  assert.equal(fence[1], bundle.world.paragraph.textContent, '围栏内必须逐字保留原文（含空行）');
+
+  // 2) 标注独立成行，且不含会被 Markdown 误解析的裸标记
+  assert.match(written, /^引用自第 3 轮回复：$/m, '标注独立成行，用自然语言而非方括号标记');
+  assert.ok(!/【|】/.test(written), '不再使用中文方括号标记（与 Markdown 混排易错乱且不美观）');
+
+  // 3) 结构顺序：标注 → 围栏 → 空行（留给用户接着写）
   assert.ok(
-    written.indexOf('【引用 · 第 3 轮回复】') < written.indexOf(bundle.world.paragraph.textContent),
-    '标记在原文之前'
+    written.indexOf('引用自第 3 轮回复：') < written.indexOf('```'),
+    '标注在围栏之前'
   );
+  assert.ok(written.endsWith('\n\n'), '末尾留空行，光标落在那里');
+});
+
+test('侧边对话引用：原文含代码围栏时不会被提前闭合', () => {
+  const service = fakeSideService();
+  const bundle = withSelection({
+    services: { betterSidebar: service },
+    world: { turn: 1, text: '看这段：\n```js\nconst a = 1;\n```\n就这些。' }
+  });
+  const composer = addSideComposer(bundle.document, { value: '' });
+  clickBar(bundle, 'side');
+
+  const written = composer.value;
+  // 原文自带的 ``` 会让外层围栏提前闭合——必须换更长的围栏或做转义
+  const outer = written.match(/^(`{3,})[^\n]*\n([\s\S]*?)\n\1$/m);
+  assert.ok(outer, '外层围栏必须完整包裹（原文内含 ``` 也不能提前闭合），实际：\n' + written);
   assert.ok(
-    written.indexOf('【/引用】') > written.indexOf(bundle.world.paragraph.textContent),
-    '结束标记在原文之后'
+    outer[2].includes('```js'),
+    '原文里的代码围栏要原样保留'
   );
-  // 多行引用每行都要保留引用前缀，不能塌成一行
-  const quoted = bundle.world.paragraph.textContent;
-  for (const line of quoted.split('\n')) {
-    assert.ok(written.includes('> ' + line), '多行引用的每一行都要带 > 前缀：' + line);
-  }
 });
 
 test('装了侧边对话且右栏已经开着输入框：直接写进去，不再开新线程', () => {
@@ -1071,7 +1090,7 @@ test('装了侧边对话且右栏已经开着输入框：直接写进去，不�
   clickBar(bundle, 'side');
 
   assert.equal(service.calls.openTab.length, 0, '已有输入框就不该再开一个线程');
-  assert.equal(composer.value, '先写了一半的问题\n\n【引用 · 第 3 轮回复】\n\n> ' + bundle.world.paragraph.textContent + '\n【/引用】\n\n');
+  assert.equal(composer.value, '先写了一半的问题\n\n引用自第 3 轮回复：\n\n```\n' + bundle.world.paragraph.textContent + '\n```\n\n');
   assert.equal(bundle.document.focusedEditor, composer, '光标要落到侧边对话输入框');
   assert.deepEqual(composer.__caret, [composer.value.length, composer.value.length], '光标落在末尾');
   assert.equal(flashText(bundle), '已在侧边对话中引用');
@@ -1101,7 +1120,7 @@ test('输入框稍后才出现：轮询等到它再写入', async () => {
   await new Promise((r) => setTimeout(r, 260));
   const composer = bundle.document.querySelector('textarea');
   assert.ok(composer, '轮询应等到输入框出现');
-  assert.equal(composer.value, '【引用 · 第 3 轮回复】\n\n> ' + bundle.world.paragraph.textContent + '\n【/引用】\n\n');
+  assert.equal(composer.value, '引用自第 3 轮回复：\n\n```\n' + bundle.world.paragraph.textContent + '\n```\n\n');
   assert.equal(flashText(bundle), '已在侧边对话中引用');
 });
 
@@ -1158,7 +1177,7 @@ test('侧边提问后再点「添加到对话」互不干扰：草稿与侧边�
 
   clickBar(bundle, 'side');
   assert.equal(bundle.actions.calls.insert.length, 0, '侧边提问不该动主会话草稿');
-  assert.match(composer.value, /^【引用 · 第 3 轮回复】\n\n> /, '侧边载荷以结构化标记 + 引用前缀开头');
+  assert.match(composer.value, /^引用自第 3 轮回复：\n\n```/, '侧边载荷以自然语言标注 + 围栏开头');
 
   bundle.window.__selection = makeSelection(bundle.document, bundle.world.paragraph, {});
   bundle.document.dispatch('selectionchange');
