@@ -25,7 +25,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const BUNDLE = join(here, '..', 'lib', 'client.js');
 const SOURCE = readFileSync(BUNDLE, 'utf8');
 /** 包名的唯一真源：模块 id 必须与它逐字相同（Loader 按包名解析浏览器模块行）。 */
-const PKG_NAME = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8')).name;
+const PKG_JSON = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8'));
+const PKG_NAME = PKG_JSON.name;
+/** 调试句柄暴露的版本必须与 package.json 一致（从真源读取，避免 bump 后测试变红）。 */
+const PKG_VERSION = PKG_JSON.version;
 
 // ---------------------------------------------------------------------------
 // 最小 DOM
@@ -547,7 +550,7 @@ test('apply()：注入打标样式表、建工具条、暴露调试句柄、注�
   assert.equal(bar.querySelector('[data-dsh-quote-sidechat="side"]').textContent, '侧边提问');
   assert.equal(bar.querySelector('[data-dsh-quote-sidechat="copy"]').textContent, '复制');
 
-  assert.equal(window.__dshQuoteSideChat.version, '0.3.0');
+  assert.equal(window.__dshQuoteSideChat.version, PKG_VERSION, '调试句柄的 version 必须等于 package.json#version');
   assert.equal(typeof window.__dshQuoteSideChat.setConfig, 'function');
 
   assert.deepEqual(injections, ['conversation.input.overlay']);
@@ -555,7 +558,8 @@ test('apply()：注入打标样式表、建工具条、暴露调试句柄、注�
   assert.equal(registered[0].options.name, 'conversation.input.overlay');
   assert.equal(registered[0].options.id, '@panando/dsh-quote-sidechat:bridge');
   assert.equal(registered[0].component, plugin.__internals.OverlayBridge);
-  assert.equal(effects.length, 1);
+  // 两个 effect：引用 source 的注销登记 + 工具条/监听器/会话桥的清理
+  assert.equal(effects.length, 2);
 
   assert.equal(document.listenerCount('selectionchange'), 1);
   assert.equal(document.listenerCount('mouseup'), 1);
@@ -1171,6 +1175,51 @@ test('点击 chip：原文在另一个会话时明确提示，不跨会话乱跳
   assert.equal(row.__scrolled, true, '同会话时应滚动定位');
 });
 
+test('引用管线晚于 apply() 就绪时仍能写 chip（加载顺序竞态，不得永久放弃注册）', () => {
+  // 复现真机回归：apply() 执行那一刻 inputTriggers 还没进 ctx，服务稍后才可用。
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const services = Object.assign({}, host.services);
+  delete services.inputTriggers;               // apply() 时拿不到
+
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(services).ctx);
+  assert.equal(host.sources.length, 0, 'apply() 时服务未就绪，不该注册');
+
+  // 服务此刻到达（ctx 读的就是 services 对象）——模拟宿主稍后 materialize 该服务
+  services.inputTriggers = host.services.inputTriggers;
+
+  const world = addConversation(document, { sessionId: 'session-main-1' });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+
+  clickBar({ document }, 'add');
+
+  assert.equal(host.sources.length, 1, '服务就绪后必须补注册，否则引用永远退化成纯文本');
+  assert.equal(host.shells.get('session-main-1').shell.calls.insertReference.length, 1,
+    '补注册后应能写入原子 chip');
+});
+
+test('probe 不得改写 lastChipDiag（否则诊断结论被自身覆盖）', () => {
+  const host = fakeHost({ sessionIds: ['session-main-1'] });
+  const { plugin, document, window, flushRaf } = loadBundle();
+  plugin.apply(makeCtx(host.services).ctx);
+  const world = addConversation(document, { sessionId: 'session-main-1' });
+  plugin.__internals.bindInstance(world.anchor, fakeActions());
+  window.__selection = makeSelection(document, world.paragraph, {});
+  document.dispatch('selectionchange');
+  flushRaf();
+
+  clickBar({ document }, 'add');
+  const before = JSON.stringify(plugin.__internals.debugState().chip.last);
+
+  window.__dshQuoteSideChat.probe();   // 内部会解析 shell
+
+  assert.equal(JSON.stringify(plugin.__internals.debugState().chip.last), before,
+    'probe 是只读诊断，不得污染上一次写入的结论');
+});
+
 test('装了侧边对话且右栏已经开着输入框：直接写进去，不再开新线程', () => {
   const service = fakeSideService();
   const bundle = withSelection({ services: { betterSidebar: service } });
@@ -1313,12 +1362,12 @@ test('调试句柄：config 白名单读写、坏数据回落默认值、insert(
 
 test('dispose()：样式表、工具条、监听器、调试句柄全部清干净', () => {
   const { plugin, document, window } = loadBundle();
-  const { ctx, effects } = makeCtx();
+  const { ctx } = makeCtx();
   plugin.apply(ctx);
   const world = addConversation(document);
   plugin.__internals.bindInstance(world.anchor, fakeActions());
 
-  effects[0].cleanup();
+  plugin.__internals.dispose();
 
   assert.equal(document.querySelector('style[data-plugin-css="@panando/dsh-quote-sidechat/style"]'), null);
   assert.equal(document.querySelector('[data-dsh-quote-sidechat="bar"]'), null);
@@ -1333,10 +1382,10 @@ test('dispose()：样式表、工具条、监听器、调试句柄全部清干�
 
 test('dispose() 之后选区变化不再建工具条（幂等且不复活）', () => {
   const { plugin, document, window, flushRaf } = loadBundle();
-  const { ctx, effects } = makeCtx();
+  const { ctx } = makeCtx();
   plugin.apply(ctx);
   const world = addConversation(document);
-  effects[0].cleanup();
+  plugin.__internals.dispose();
 
   window.__selection = makeSelection(document, world.paragraph, {});
   document.dispatch('selectionchange');
